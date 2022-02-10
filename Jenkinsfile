@@ -167,7 +167,7 @@ node {
   def AWS_DEFAULT_REGION="eu-central-1" 
 
   stage('Clean workspace') {      
-    sh "rm -r *"           
+    cleanWs()           
   }
 
   stage('Logging into AWS ECR') {      
