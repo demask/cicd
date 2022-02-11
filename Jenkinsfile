@@ -51,7 +51,7 @@ def cloneGitRepo() {
         doGenerateSubmoduleConfigurations: false, 
         extensions: [[$class: 'RelativeTargetDirectory', relativeTargetDir: 'code_directory']], 
         submoduleCfg: [], 
-        userRemoteConfigs: [[credentialsId: '', url: 'https://github.com/demask/aws_codebuild_codedeploy_nodeJs_demo.git']]])                 
+        userRemoteConfigs: [[credentialsId: '', url: 'https://github.com/demask/repo-free.git']]])                 
     }
   } else {
     stage('Cloning Git') {           
