@@ -43,7 +43,7 @@ def jobsToRun(build, jobsByProjectPath) {
 }
 
 def cloneGitRepo() {
-  if(env.JOB_NAME.contains("My-Test")) {
+  if(env.JOB_NAME.contains("repo-free")) {
     stage('Cloning Git 2') {           
       checkout([
         $class: 'GitSCM', 
@@ -132,7 +132,7 @@ def createAndPushDockerImages(currentBuild, jobsByProjectPath, AWS_ACCOUNT_ID, A
   dir("${env.WORKSPACE}/code_directory"){  
     def jobs
     stage('Check jobs to run') {
-      if(env.JOB_NAME.contains("My-Test")) {
+      if(env.JOB_NAME.contains("repo-free")) {
         jobs = ["other-repo-job" : true]
       } else {
         jobs = jobsToRun(currentBuild, jobsByProjectPath)
