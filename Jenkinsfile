@@ -43,7 +43,18 @@ def jobsToRun(build, jobsByProjectPath) {
 }
 
 def cloneGitRepo() {
-  stage('Cloning Git') {           
+  if(${env.JOB_NAME}.contains("test-cicd")) {
+    stage('Cloning Git 2') {           
+      checkout([
+        $class: 'GitSCM', 
+        branches: [[name: '*/master']], 
+        doGenerateSubmoduleConfigurations: false, 
+        extensions: [[$class: 'RelativeTargetDirectory', relativeTargetDir: 'code_directory']], 
+        submoduleCfg: [], 
+        userRemoteConfigs: [[credentialsId: '', url: 'https://github.com/demask/test-cicd.git']]])                 
+    }
+  } else {
+    stage('Cloning Git') {           
     checkout([
       $class: 'GitSCM', 
       branches: [[name: '*/master']], 
@@ -51,6 +62,7 @@ def cloneGitRepo() {
       extensions: [[$class: 'RelativeTargetDirectory', relativeTargetDir: 'code_directory']], 
       submoduleCfg: [], 
       userRemoteConfigs: [[credentialsId: '', url: 'https://github.com/demask/aws_codebuild_codedeploy_nodeJs_demo.git']]])                 
+    }
   }
 
   stage('Cloning Terraform Git') {           
@@ -92,6 +104,10 @@ def createTaskDefinitions(newDockerImageMap) {
         runTerraform(it.value)     
       } 
       jobAlreadyCreated = true
+    } else if(it.key == 'other-repo-job') {
+      dir("${env.WORKSPACE}/terraform_directory/dev/task-definitions/other-repo-job"){
+        runTerraform(it.value)     
+      } 
     }
   }
 }
@@ -116,8 +132,12 @@ def createAndPushDockerImages(currentBuild, jobsByProjectPath, AWS_ACCOUNT_ID, A
   dir("${env.WORKSPACE}/code_directory"){  
     def jobs
     stage('Check jobs to run') {
-      jobs = jobsToRun(currentBuild, jobsByProjectPath)
-      addPhpIfNginxPresent(jobs)
+      if(${env.JOB_NAME}.contains("test-cicd")) {
+        jobs = ["other-repo-job" : true]
+      } else {
+        jobs = jobsToRun(currentBuild, jobsByProjectPath)
+        addPhpIfNginxPresent(jobs)
+      } 
     }
     
     def IMAGE_TAG = sh (script: 'git rev-parse --short HEAD',returnStdout: true).trim()
@@ -143,6 +163,10 @@ def createAndPushDockerImages(currentBuild, jobsByProjectPath, AWS_ACCOUNT_ID, A
         DOCKERFILE = 'Dockerfile'
         IMAGE_REPO_NAME="job2_2"
         buildDockerImage(IMAGE_TAG, IMAGE_REPO_NAME, DOCKERFILE, AWS_ACCOUNT_ID, AWS_DEFAULT_REGION, newDockerImageMap)   
+      } else if(it.key == 'other-repo-job' && it.value) {
+        DOCKERFILE = 'Dockerfile'
+        IMAGE_REPO_NAME="other-repo-job"
+        buildDockerImage(IMAGE_TAG, IMAGE_REPO_NAME, DOCKERFILE, AWS_ACCOUNT_ID, AWS_DEFAULT_REGION, newDockerImageMap)
       }
     } 
   }
