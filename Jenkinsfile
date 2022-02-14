@@ -43,7 +43,7 @@ def jobsToRun(build, jobsByProjectPath) {
 }
 
 def cloneGitRepo() {
-  if(env.upstreamJob == 'Freestyle-Monitor-free-repo') {
+  if(${upstreamJob} == 'Freestyle-Monitor-free-repo') {
     stage('Cloning Git 2') {           
       checkout([
         $class: 'GitSCM', 
@@ -132,7 +132,7 @@ def createAndPushDockerImages(currentBuild, jobsByProjectPath, AWS_ACCOUNT_ID, A
   dir("${env.WORKSPACE}/code_directory"){  
     def jobs
     stage('Check jobs to run') {
-      if(env.upstreamJob == 'Freestyle-Monitor-free-repo') {
+      if(${upstreamJob} == 'Freestyle-Monitor-free-repo') {
         jobs = ["other-repo-job" : true]
       } else {
         jobs = jobsToRun(currentBuild, jobsByProjectPath)
