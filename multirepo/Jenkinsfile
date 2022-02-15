@@ -85,6 +85,6 @@ node {
   }
         
   cloneGitRepo()
-  def newDockerImageMap = createAndPushDockerImages(currentBuild, jobsByProjectPath, AWS_ACCOUNT_ID, AWS_DEFAULT_REGION)
+  def newDockerImageMap = createAndPushDockerImages(currentBuild, AWS_ACCOUNT_ID, AWS_DEFAULT_REGION)
   createTaskDefinitions(newDockerImageMap)
 }
