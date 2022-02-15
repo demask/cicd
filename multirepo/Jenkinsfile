@@ -35,7 +35,7 @@ def runTerraform(dockerImageTag) {
   }
 }
 
-def createTaskDefinitions() {
+def createTaskDefinitions(newDockerImageMap) {
   newDockerImageMap.each{
     if(it.key == 'other-repo-job') {
       dir("${env.WORKSPACE}/terraform_directory/dev/task-definitions/other-repo-job"){
