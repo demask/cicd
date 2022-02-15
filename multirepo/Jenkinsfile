@@ -41,7 +41,8 @@ def createTaskDefinitions() {
       dir("${env.WORKSPACE}/terraform_directory/dev/task-definitions/other-repo-job"){
         runTerraform(it.value)     
       } 
-    }  
+    } 
+  }   
 }
 
 def buildDockerImage(IMAGE_TAG, IMAGE_REPO_NAME, DOCKERFILE, AWS_ACCOUNT_ID, AWS_DEFAULT_REGION, newDockerImageMap) {
