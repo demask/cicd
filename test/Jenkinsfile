@@ -1,0 +1,13 @@
+pipeline {
+      agent any
+      stages {
+          stage('Check Environment') {
+              when {
+                  expression { return params.current_status == "closed" && params.merged == true }
+              }
+              steps {
+                  build 'Environment Check'
+              }
+          }
+      }
+  }
