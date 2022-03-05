@@ -6,7 +6,7 @@ pipeline {
                   expression { return params.current_status == "closed" && params.merged == true }
               }
               steps {
-                  build 'Environment Check'
+                  echo 'Environment Check'
               }
           }
       }
