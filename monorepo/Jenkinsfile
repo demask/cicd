@@ -169,7 +169,7 @@ def addPhpIfNginxPresent(jobsToRun) {
 }
 
 node {
-   parameters {
+  parameters {
     string(name: 'branch', defaultValue: '', description: 'Branch on which was merged', trim: true)
   }
 
