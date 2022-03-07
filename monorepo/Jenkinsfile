@@ -121,6 +121,12 @@ def createAndPushDockerImages(currentBuild, jobsByProjectPath, AWS_ACCOUNT_ID, A
     }
     
     def IMAGE_TAG = sh (script: 'git rev-parse --short HEAD',returnStdout: true).trim()
+    if(params.branch == "develop") {
+      def IMAGE_TAG = "dev"
+    } else if(params.branch == "master") {
+      def IMAGE_TAG = "prod"
+    }
+
     jobs.each{
       def IMAGE_REPO_NAME
       def DOCKERFILE
@@ -176,5 +182,8 @@ node {
         
   cloneGitRepo()
   def newDockerImageMap = createAndPushDockerImages(currentBuild, jobsByProjectPath, AWS_ACCOUNT_ID, AWS_DEFAULT_REGION)
-  createTaskDefinitions(newDockerImageMap)
+
+  if(params.branch == "develop") {
+    createTaskDefinitions(newDockerImageMap)
+  }
 }
