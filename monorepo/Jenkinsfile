@@ -122,9 +122,9 @@ def createAndPushDockerImages(currentBuild, jobsByProjectPath, AWS_ACCOUNT_ID, A
     
     def IMAGE_TAG = sh (script: 'git rev-parse --short HEAD',returnStdout: true).trim()
     if(params.branch == "develop") {
-      def IMAGE_TAG = "dev"
+      IMAGE_TAG = "dev"
     } else if(params.branch == "master") {
-      def IMAGE_TAG = "prod"
+      IMAGE_TAG = "prod"
     }
 
     jobs.each{
