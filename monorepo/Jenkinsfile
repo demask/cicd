@@ -76,22 +76,24 @@ def runTerraform(dockerImageTag) {
   }
 }
 
-def createTaskDefinitions(newDockerImageMap) {
+def createTaskDefinitions(newDockerImageMap, merged_into_branch) {
   def jobAlreadyCreated = false
+  def terraformDirectoryByEnvironment = "dev"
+  if(merged_into_branch == "develop") {
+    terraformDirectoryByEnvironment = "dev"
+  }
+
   newDockerImageMap.each{
-    if(it.key == 'job1') {
-      dir("${env.WORKSPACE}/terraform_directory/dev/ecs-service/job1"){
+    if(!jobAlreadyCreated && (it.key == 'job2_1' || it.key == 'job2_2')) {
+      dir("${env.WORKSPACE}/terraform_directory/${terraformDirectoryByEnvironment}/ecs-service/job2"){
         runTerraform(it.value)     
       } 
-    } else if(it.key == 'job3') {
-      dir("${env.WORKSPACE}/terraform_directory/dev/ecs-service/job3"){
-        runTerraform(it.value)     
-      } 
-    } else if(!jobAlreadyCreated && (it.key == 'job2_1' || it.key == 'job2_2')) {
-      dir("${env.WORKSPACE}/terraform_directory/dev/ecs-service/job2"){
-        runTerraform(it.value)     
-      } 
+
       jobAlreadyCreated = true
+    } else if(it.key != 'job2_1' && it.key != 'job2_2') {
+      dir("${env.WORKSPACE}/terraform_directory/${terraformDirectoryByEnvironment}/ecs-service/${it.key}"){
+        runTerraform(it.value)     
+      } 
     }
   }
 }
@@ -128,27 +130,28 @@ def createAndPushDockerImages(currentBuild, jobsByProjectPath, AWS_ACCOUNT_ID, A
     }
 
     jobs.each{
-      def IMAGE_REPO_NAME
       def DOCKERFILE
+      def IMAGE_REPO_NAME
+      if(it.key) {
+        IMAGE_REPO_NAME = it.key
+      }
 
       if(it.key == 'job1' && it.value) {
         DOCKERFILE = 'Dockerfile'
-        IMAGE_REPO_NAME="job1"
-        buildDockerImage(IMAGE_TAG, IMAGE_REPO_NAME, DOCKERFILE, AWS_ACCOUNT_ID, AWS_DEFAULT_REGION, newDockerImageMap)
       } else if(it.key == 'job3' && it.value) {
         DOCKERFILE = 'DockerfileJob3'
-        IMAGE_REPO_NAME="job3"
+      } else if(it.key == 'job2_1' && it.value) {
+        DOCKERFILE = 'Dockerfile'
+      } else if(it.key == 'job2_2' && it.value) {
+        DOCKERFILE = 'Dockerfile'
+      }
+
+      if(it.key == 'job3' && it.value && DOCKERFILE && IMAGE_REPO_NAME) {
         dir("${env.WORKSPACE}/code_directory/job3"){
           buildDockerImage(IMAGE_TAG, IMAGE_REPO_NAME, DOCKERFILE, AWS_ACCOUNT_ID, AWS_DEFAULT_REGION, newDockerImageMap)
         }
-      } else if(it.key == 'job2_1' && it.value) {
-        DOCKERFILE = 'Dockerfile'
-        IMAGE_REPO_NAME="job2_1"   
-        buildDockerImage(IMAGE_TAG, IMAGE_REPO_NAME, DOCKERFILE, AWS_ACCOUNT_ID, AWS_DEFAULT_REGION, newDockerImageMap)  
-      } else if(it.key == 'job2_2' && it.value) {
-        DOCKERFILE = 'Dockerfile'
-        IMAGE_REPO_NAME="job2_2"
-        buildDockerImage(IMAGE_TAG, IMAGE_REPO_NAME, DOCKERFILE, AWS_ACCOUNT_ID, AWS_DEFAULT_REGION, newDockerImageMap)   
+      } else if(DOCKERFILE && IMAGE_REPO_NAME) {
+        buildDockerImage(IMAGE_TAG, IMAGE_REPO_NAME, DOCKERFILE, AWS_ACCOUNT_ID, AWS_DEFAULT_REGION, newDockerImageMap)
       }
     } 
   }
@@ -190,6 +193,6 @@ node {
   def newDockerImageMap = createAndPushDockerImages(currentBuild, jobsByProjectPath, AWS_ACCOUNT_ID, AWS_DEFAULT_REGION, merged_into_branch)
 
   if(merged_into_branch == "develop") {
-    createTaskDefinitions(newDockerImageMap)
+    createTaskDefinitions(newDockerImageMap, merged_into_branch)
   }
 }
