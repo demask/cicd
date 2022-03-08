@@ -122,9 +122,9 @@ def createAndPushDockerImages(currentBuild, jobsByProjectPath, AWS_ACCOUNT_ID, A
     
     def IMAGE_TAG = sh (script: 'git rev-parse --short HEAD',returnStdout: true).trim()
     if(merged_into_branch == "develop") {
-      IMAGE_TAG = "dev"
+      IMAGE_TAG = "dev_" + IMAGE_TAG
     } else if(merged_into_branch == "master") {
-      IMAGE_TAG = "prod"
+      IMAGE_TAG = "prod_" + IMAGE_TAG
     }
 
     jobs.each{
