@@ -65,9 +65,9 @@ def createAndPushDockerImages(currentBuild, AWS_ACCOUNT_ID, AWS_DEFAULT_REGION, 
   dir("${env.WORKSPACE}/code_directory"){  
     def IMAGE_TAG = sh (script: 'git rev-parse --short HEAD',returnStdout: true).trim()
     if(merged_into_branch == "develop") {
-      IMAGE_TAG = "dev_" + IMAGE_TAG
+      IMAGE_TAG = "dev"
     } else if(merged_into_branch == "master") {
-      IMAGE_TAG = "prod_" + IMAGE_TAG
+      IMAGE_TAG = "prod"
     }
     
     def DOCKERFILE = 'Dockerfile'
