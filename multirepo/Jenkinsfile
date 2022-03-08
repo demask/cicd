@@ -35,10 +35,15 @@ def runTerraform(dockerImageTag) {
   }
 }
 
-def createTaskDefinitions(newDockerImageMap) {
+def createTaskDefinitions(newDockerImageMap, merged_into_branch) {
+  def terraformDirectoryByEnvironment = "dev"
+  if(merged_into_branch == "develop") {
+    terraformDirectoryByEnvironment = "dev"
+  }
+
   newDockerImageMap.each{
     if(it.key == 'other-repo-job') {
-      dir("${env.WORKSPACE}/terraform_directory/dev/ecs-service/other-repo-job"){
+      dir("${env.WORKSPACE}/terraform_directory/${terraformDirectoryByEnvironment}/ecs-service/other-repo-job"){
         runTerraform(it.value)     
       } 
     } 
@@ -100,6 +105,6 @@ node {
   def newDockerImageMap = createAndPushDockerImages(currentBuild, jobsByProjectPath, AWS_ACCOUNT_ID, AWS_DEFAULT_REGION, merged_into_branch)
 
   if(merged_into_branch == "develop") {
-    createTaskDefinitions(newDockerImageMap)
+    createTaskDefinitions(newDockerImageMap, merged_into_branch)
   }
 }
