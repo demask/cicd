@@ -179,12 +179,14 @@ node {
     string(name: 'tag', defaultValue: '', description: 'Tag', trim: true)
   ]
   
+  def tagRegex = /(DEV|DEMO)/
+
   println "$branch"
   println "$merged"
   println "$ref_type"
   println "$tag"
+  println "$tag" ==~ tagRegex
 
-  def tagRegex = /(DEV|DEMO)/
   def merged_into_branch
   if("$merged" == "true" || ("$ref_type" == "tag" && "$tag" ==~ tagRegex)) {
     
