@@ -183,7 +183,7 @@ node {
 
   def tagRegex = /(DEV|DEMO)/
   def merged_into_branch
-  if("$merged" == "true" || ($ref_type" == "tag" && "$tag" ==~ tagRegex)) {
+  if("$merged" == "true" || ("$ref_type" == "tag" && "$tag" ==~ tagRegex)) {
     
     if("$merged" == "true") {
       merged_into_branch = "$branch"
