@@ -44,7 +44,6 @@ def jobsToRun(build, jobsByProjectPath) {
 
 def cloneGitRepo(merged_into_branch, ref_type) {
   stage('Cloning Git') {    
-    println ref_type       
     if(ref_type == "tag") {
       checkout([
       $class: 'GitSCM', 
@@ -201,7 +200,7 @@ node {
     if("$merged" == "true") {
       merged_into_branch = "$branch"
     } else if("$ref_type" == "tag") {
-      merged_into_branch = "refs/tags/$tag"
+      merged_into_branch = "*/tags/$tag"
     }
     println merged_into_branch
     def AWS_ACCOUNT_ID="246005639140"
