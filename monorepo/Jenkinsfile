@@ -179,6 +179,10 @@ node {
     string(name: 'tag', defaultValue: '', description: 'Tag', trim: true)
   ]
   
+  println "$branch"
+  println "$merged"
+  println "$ref_type"
+  println "$tag"
 
   def tagRegex = /(DEV|DEMO)/
   def merged_into_branch
