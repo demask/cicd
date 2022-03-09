@@ -188,7 +188,7 @@ node {
     } else if("$ref_type" == "tag") {
       merged_into_branch = "refs/tags/$tag"
     }
-
+    println merged_into_branch
     def AWS_ACCOUNT_ID="246005639140"
     def AWS_DEFAULT_REGION="eu-central-1" 
 
