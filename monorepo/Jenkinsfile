@@ -42,11 +42,11 @@ def jobsToRun(build, jobsByProjectPath) {
   jobsToRun
 }
 
-def cloneGitRepo(merged_into_branch) {
+def cloneGitRepo(branchToClone) {
   stage('Cloning Git') {    
     checkout([
       $class: 'GitSCM', 
-      branches: [[name: "$merged_into_branch"]], 
+      branches: [[name: "$branchToClone"]], 
       doGenerateSubmoduleConfigurations: false, 
       extensions: [[$class: 'RelativeTargetDirectory', relativeTargetDir: 'code_directory']], 
       submoduleCfg: [], 
@@ -76,11 +76,17 @@ def runTerraform(dockerImageTag) {
   }
 }
 
-def createTaskDefinitions(newDockerImageMap, merged_into_branch) {
+def createTaskDefinitions(newDockerImageMap, environment) {
   def jobAlreadyCreated = false
   def terraformDirectoryByEnvironment = "dev"
-  if(merged_into_branch == "develop") {
+  if(environment == "dev") {
     terraformDirectoryByEnvironment = "dev"
+  } else if(environment == "prod") {
+    terraformDirectoryByEnvironment = "prod"
+  } else if(environment == "qa") {
+    terraformDirectoryByEnvironment = "qa"
+  } else if(environment == "demo") {
+    terraformDirectoryByEnvironment = "demo"
   }
 
   newDockerImageMap.each{
@@ -113,19 +119,32 @@ def buildDockerImage(IMAGE_TAG, IMAGE_REPO_NAME, DOCKERFILE, AWS_ACCOUNT_ID, AWS
   newDockerImageMap[IMAGE_REPO_NAME] = IMAGE_TAG
 }
 
-def createAndPushDockerImages(currentBuild, jobsByProjectPath, AWS_ACCOUNT_ID, AWS_DEFAULT_REGION, merged_into_branch) {
+def createAndPushDockerImages(currentBuild, jobsByProjectPath, AWS_ACCOUNT_ID, AWS_DEFAULT_REGION, environment) {
   def newDockerImageMap = [:]
   dir("${env.WORKSPACE}/code_directory"){  
     def jobs
-    stage('Check jobs to run') { 
-      jobs = jobsToRun(currentBuild, jobsByProjectPath)
-      addPhpIfNginxPresent(jobs)
+    if(environment == "dev" || environment == "master") {
+      stage('Check jobs to run') { 
+        jobs = jobsToRun(currentBuild, jobsByProjectPath)
+        addPhpIfNginxPresent(jobs)
+      }
+    } else {
+      jobs = [
+        "job1" : true,
+        "job2_1" : true,
+        "job2_2" : true,
+        "job3" : true
+      ]
     }
     
     def IMAGE_TAG = sh (script: 'git rev-parse --short HEAD',returnStdout: true).trim()
-    if(merged_into_branch == "develop") {
+    if(environment == "dev") {
       IMAGE_TAG = "dev_" + IMAGE_TAG
-    } else if(merged_into_branch == "master") {
+    } else if(environment == "demo") {
+      IMAGE_TAG = "demo_" + IMAGE_TAG
+    } else if(environment == "qa") {
+      IMAGE_TAG = "qa_" + IMAGE_TAG
+    } else if(environment == "prod") {
       IMAGE_TAG = "prod_" + IMAGE_TAG
     }
 
@@ -178,19 +197,35 @@ node {
     string(name: 'ref_type', defaultValue: '', description: 'Ref type', trim: true),
     string(name: 'tag', defaultValue: '', description: 'Tag', trim: true)
   ]
+  def AWS_ACCOUNT_ID="246005639140"
+  def AWS_DEFAULT_REGION="eu-central-1" 
 
-  def tagRegex = /.*DEV.*|.*DEMO.*/
-  def merged_into_branch
-  if("$merged" == "true" || ("$ref_type" == "tag" && "$tag" ==~ tagRegex)) {
+  def tagRegex = /.*DEMO.*|.*QA.*/
+  def mergedIntoDevelop = "$merged" == "true" && "$branch" == "develop"
+  def mergedIntoMaster = "$merged" == "true" && "$branch" == "master"
+  def tagPushed = "$ref_type" == "tag" && "$tag" ==~ tagRegex
+
+  if(mergedIntoMaster || mergedIntoDevelop || tagPushed) {
+    def branchToClone
     
-    if("$merged" == "true") {
-      merged_into_branch = "$branch"
-    } else if("$ref_type" == "tag") {
-      merged_into_branch = "refs/tags/$tag"
+    if(mergedIntoMaster || mergedIntoDevelop) {
+      branchToClone = "$branch"
+    } else {
+      branchToClone = "refs/tags/$tag"
     }
-    println merged_into_branch
-    def AWS_ACCOUNT_ID="246005639140"
-    def AWS_DEFAULT_REGION="eu-central-1" 
+
+    def environment
+    if(mergedIntoMaster) {
+      environment = "master"
+    } else if(mergedIntoDevelop) {
+      environment = "dev"
+    } else if(branchToClone.contains("DEMO")) {
+      environment = "demo"
+    } else if(branchToClone.contains("QA")) {
+      environment = "qa"
+    } else if(branchToClone.contains("PROD")) {
+      environment = "prod"
+    }
 
     stage('Clean workspace') {      
       cleanWs()           
@@ -200,11 +235,12 @@ node {
       sh "aws ecr get-login-password --region ${AWS_DEFAULT_REGION} | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com"           
     }
         
-    cloneGitRepo(merged_into_branch)
-    def newDockerImageMap = createAndPushDockerImages(currentBuild, jobsByProjectPath, AWS_ACCOUNT_ID, AWS_DEFAULT_REGION, merged_into_branch)
+    cloneGitRepo(branchToClone)
 
-    if(merged_into_branch != "master") {
-      createTaskDefinitions(newDockerImageMap, merged_into_branch)
+    def newDockerImageMap = createAndPushDockerImages(currentBuild, jobsByProjectPath, AWS_ACCOUNT_ID, AWS_DEFAULT_REGION, environment)
+
+    if(!mergedIntoMaster) {
+      createTaskDefinitions(newDockerImageMap, environment)
     }
   }
 }
