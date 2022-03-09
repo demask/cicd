@@ -179,8 +179,9 @@ node {
     string(name: 'tag', defaultValue: '', description: 'Tag', trim: true)
   }
 
+  def tagRegex = /(DEV|DEMO)/
   def merged_into_branch
-  if("$merged" == "true" || $ref_type" == "tag") {
+  if("$merged" == "true" || ($ref_type" == "tag" && "$tag" ==~ tagRegex)) {
     
     if("$merged" == "true") {
       merged_into_branch = "$branch"
