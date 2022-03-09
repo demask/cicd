@@ -172,14 +172,13 @@ def addPhpIfNginxPresent(jobsToRun) {
 }
 
 node {
-  properties([
-    parameters([
-      string(name: 'branch', defaultValue: '', description: 'Branch on which was merged', trim: true),
-      string(name: 'merged', defaultValue: '', description: 'Did merge occured', trim: true),
-      string(name: 'ref_type', defaultValue: '', description: 'Ref type', trim: true),
-      string(name: 'tag', defaultValue: '', description: 'Tag', trim: true)
-    ])
-  ])
+  parameters: [
+    string(name: 'branch', defaultValue: '', description: 'Branch on which was merged', trim: true),
+    string(name: 'merged', defaultValue: '', description: 'Did merge occured', trim: true),
+    string(name: 'ref_type', defaultValue: '', description: 'Ref type', trim: true),
+    string(name: 'tag', defaultValue: '', description: 'Tag', trim: true)
+  ]
+  
 
   def tagRegex = /(DEV|DEMO)/
   def merged_into_branch
