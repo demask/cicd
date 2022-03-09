@@ -186,7 +186,7 @@ node {
     if("$merged" == "true") {
       merged_into_branch = "$branch"
     } else if("$ref_type" == "tag") {
-      merged_into_branch = "$tag"
+      merged_into_branch = "refs/tags/$tag"
     }
 
     def AWS_ACCOUNT_ID="246005639140"
