@@ -42,15 +42,29 @@ def jobsToRun(build, jobsByProjectPath) {
   jobsToRun
 }
 
-def cloneGitRepo(merged_into_branch) {
+def cloneGitRepo(merged_into_branch, ref_type) {
   stage('Cloning Git') {           
-    checkout([
+    if(ref_type == "tag") {
+      checkout([
       $class: 'GitSCM', 
       branches: [[name: "*/$merged_into_branch"]], 
       doGenerateSubmoduleConfigurations: false, 
       extensions: [[$class: 'RelativeTargetDirectory', relativeTargetDir: 'code_directory']], 
       submoduleCfg: [], 
-      userRemoteConfigs: [[credentialsId: '', url: 'https://github.com/demask/aws_codebuild_codedeploy_nodeJs_demo.git']]])                 
+      userRemoteConfigs: [[
+        credentialsId: '', 
+        refspec: '+refs/tags/*:refs/remotes/origin/tags/*',
+        url: 'https://github.com/demask/aws_codebuild_codedeploy_nodeJs_demo.git'
+        ]]])
+    } else {
+      checkout([
+      $class: 'GitSCM', 
+      branches: [[name: "*/$merged_into_branch"]], 
+      doGenerateSubmoduleConfigurations: false, 
+      extensions: [[$class: 'RelativeTargetDirectory', relativeTargetDir: 'code_directory']], 
+      submoduleCfg: [], 
+      userRemoteConfigs: [[credentialsId: '', url: 'https://github.com/demask/aws_codebuild_codedeploy_nodeJs_demo.git']]])     
+    }        
   }
 
   stage('Cloning Terraform Git') {           
@@ -200,7 +214,7 @@ node {
       sh "aws ecr get-login-password --region ${AWS_DEFAULT_REGION} | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com"           
     }
         
-    cloneGitRepo(merged_into_branch)
+    cloneGitRepo(merged_into_branch, "$ref_type")
     def newDockerImageMap = createAndPushDockerImages(currentBuild, jobsByProjectPath, AWS_ACCOUNT_ID, AWS_DEFAULT_REGION, merged_into_branch)
 
     if(merged_into_branch != "master") {
