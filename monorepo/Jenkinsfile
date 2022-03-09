@@ -43,7 +43,8 @@ def jobsToRun(build, jobsByProjectPath) {
 }
 
 def cloneGitRepo(merged_into_branch, ref_type) {
-  stage('Cloning Git') {           
+  stage('Cloning Git') {    
+    println ref_type       
     if(ref_type == "tag") {
       checkout([
       $class: 'GitSCM', 
