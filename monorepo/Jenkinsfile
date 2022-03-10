@@ -152,7 +152,7 @@ def createDockerImages(currentBuild, jobsByProjectPath, AWS_ACCOUNT_ID, AWS_DEFA
         } else if(it.key == 'job2_1' && it.value) {
           DOCKERFILE = 'Dockerfile'
         } else if(it.key == 'job2_2' && it.value) {
-          DOCKERFILE = 'Dockerfile'
+          DOCKERFILE = 'Dockerfile2'
         }
 
         if(it.key == 'job3' && it.value && DOCKERFILE && IMAGE_REPO_NAME) {
