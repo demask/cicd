@@ -1,11 +1,17 @@
 import jenkins.*;
 import jenkins.model.*;
 
-def cloneGitRepo(merged_into_branch) {
+ENVIRONMENT_DEV = "dev"
+ENVIRONMENT_DEMO = "demo"
+ENVIRONMENT_QA = "qa"
+ENVIRONMENT_PROD = "prod"
+ENVIRONMENT_MASTER = "master"
+
+def cloneGitRepo(branchToClone) {
   stage('Cloning Git') {           
     checkout([
       $class: 'GitSCM', 
-      branches: [[name: '*/$merged_into_branch']], 
+      branches: [[name: '*/$branchToClone']], 
       doGenerateSubmoduleConfigurations: false, 
       extensions: [[$class: 'RelativeTargetDirectory', relativeTargetDir: 'code_directory']], 
       submoduleCfg: [], 
@@ -24,87 +30,111 @@ def cloneGitRepo(merged_into_branch) {
 }
 
 def runTerraform(dockerImageTag) {
-  stage('Terraform Init') {     
-    sh 'terraform init -no-color'
-  }
-                
-  stage('Terraform Apply') {     
-    sh ("""terraform apply \
-    -var=\"docker_image_tag=${dockerImageTag}\" \
-    -auto-approve -no-color""")
-  }
+  sh 'terraform init -no-color'
+               
+  sh ("""terraform apply \
+  -var=\"docker_image_tag=${dockerImageTag}\" \
+  -auto-approve -no-color""")
 }
 
-def createTaskDefinitions(newDockerImageMap, merged_into_branch) {
-  def terraformDirectoryByEnvironment = "dev"
-  if(merged_into_branch == "develop") {
-    terraformDirectoryByEnvironment = "dev"
-  }
-
-  newDockerImageMap.each{
-    if(it.key == 'other-repo-job') {
-      dir("${env.WORKSPACE}/terraform_directory/${terraformDirectoryByEnvironment}/ecs-service/other-repo-job"){
-        runTerraform(it.value)     
+def createEcsServices(newDockerImageMap, environment) {
+  stage('Run Terraform') { 
+    newDockerImageMap.each{
+      if(it.key == 'other-repo-job') {
+        dir("${env.WORKSPACE}/terraform_directory/${environment}/ecs-service/other-repo-job"){
+          runTerraform(it.value)     
+        } 
       } 
-    } 
-  }   
+    }   
+  }
 }
 
-def buildDockerImage(IMAGE_TAG, IMAGE_REPO_NAME, DOCKERFILE, AWS_ACCOUNT_ID, AWS_DEFAULT_REGION, newDockerImageMap) {
+def buildAndPushDockerImage(IMAGE_TAG, IMAGE_REPO_NAME, DOCKERFILE, AWS_ACCOUNT_ID, AWS_DEFAULT_REGION) {
   def REPOSITORY_URI = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${IMAGE_REPO_NAME}"
 
-  stage('Building image') {
-    dockerImage = docker.build("${IMAGE_REPO_NAME}:${IMAGE_TAG}", "-f ${DOCKERFILE} .")                         
-  }
+  dockerImage = docker.build("${IMAGE_REPO_NAME}:${IMAGE_TAG}", "-f ${DOCKERFILE} .")                         
+  
    
-  stage('Push image to ECR') {         
-    sh "docker tag ${IMAGE_REPO_NAME}:${IMAGE_TAG} ${REPOSITORY_URI}:${IMAGE_TAG}"
-    sh "docker push ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${IMAGE_REPO_NAME}:${IMAGE_TAG}"                            
-  }
-
-  newDockerImageMap[IMAGE_REPO_NAME] = IMAGE_TAG
+  sh "docker tag ${IMAGE_REPO_NAME}:${IMAGE_TAG} ${REPOSITORY_URI}:${IMAGE_TAG}"
+  sh "docker push ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${IMAGE_REPO_NAME}:${IMAGE_TAG}"
 }
 
-def createAndPushDockerImages(currentBuild, AWS_ACCOUNT_ID, AWS_DEFAULT_REGION, merged_into_branch) {
+def createDockerImages(currentBuild, AWS_ACCOUNT_ID, AWS_DEFAULT_REGION, environment) {
   def newDockerImageMap = [:]
   dir("${env.WORKSPACE}/code_directory"){  
     def IMAGE_TAG = sh (script: 'git rev-parse --short HEAD',returnStdout: true).trim()
-    if(merged_into_branch == "develop") {
+    if(environment == ENVIRONMENT_DEV) {
       IMAGE_TAG = "dev_" + IMAGE_TAG
-    } else if(merged_into_branch == "master") {
+    } else if(environment == ENVIRONMENT_DEMO) {
+      IMAGE_TAG = "demo_" + IMAGE_TAG
+    } else if(environment == ENVIRONMENT_QA) {
+      IMAGE_TAG = "qa_" + IMAGE_TAG
+    } else if(environment == ENVIRONMENT_PROD || environment == ENVIRONMENT_MASTER) {
       IMAGE_TAG = "prod_" + IMAGE_TAG
     }
     
-    def DOCKERFILE = 'Dockerfile'
-    def IMAGE_REPO_NAME="other-repo-job"
-    buildDockerImage(IMAGE_TAG, IMAGE_REPO_NAME, DOCKERFILE, AWS_ACCOUNT_ID, AWS_DEFAULT_REGION, newDockerImageMap)
+    stage('Build and push images') {
+      def DOCKERFILE = 'Dockerfile'
+      def IMAGE_REPO_NAME="other-repo-job"
+      buildAndPushDockerImage(IMAGE_TAG, IMAGE_REPO_NAME, DOCKERFILE, AWS_ACCOUNT_ID, AWS_DEFAULT_REGION)
+      newDockerImageMap[IMAGE_REPO_NAME] = IMAGE_TAG
+    }
   }
 
   return newDockerImageMap
 }
 
 node {
-  parameters {
-    string(name: 'branch', defaultValue: '', description: 'Branch on which was merged', trim: true)
-  }
-
-  def merged_into_branch = "$branch"
-
+  parameters: [
+    string(name: 'branch', defaultValue: '', description: 'Branch on which was merged', trim: true),
+    string(name: 'merged', defaultValue: '', description: 'Did merge occured', trim: true),
+    string(name: 'ref_type', defaultValue: '', description: 'Ref type', trim: true),
+    string(name: 'tag', defaultValue: '', description: 'Tag', trim: true)
+  ]
   def AWS_ACCOUNT_ID="246005639140"
   def AWS_DEFAULT_REGION="eu-central-1" 
 
-  stage('Clean workspace') {      
-    cleanWs()           
-  }
+  def tagRegex = /.*DEMO.*|.*QA.*|.*PROD.*/
+  def mergedIntoDevelop = "$merged" == "true" && "$branch" == "develop"
+  def mergedIntoMasterMain = "$merged" == "true" && ("$branch" == "master" || "$branch" == "main")
+  def tagPushed = "$ref_type" == "tag" && "$tag" ==~ tagRegex
 
-  stage('Logging into AWS ECR') {      
-    sh "aws ecr get-login-password --region ${AWS_DEFAULT_REGION} | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com"           
-  }
+  if(mergedIntoMasterMain || mergedIntoDevelop || tagPushed) {
+    def branchToClone
+    
+    if(mergedIntoMasterMain || mergedIntoDevelop) {
+      branchToClone = "$branch"
+    } else {
+      branchToClone = "refs/tags/$tag"
+    }
+
+    def environment
+    if(mergedIntoMasterMain) {
+      environment = ENVIRONMENT_MASTER
+    } else if(mergedIntoDevelop) {
+      environment = ENVIRONMENT_DEV
+    } else if(branchToClone.contains("DEMO")) {
+      environment = ENVIRONMENT_DEMO
+    } else if(branchToClone.contains("QA")) {
+      environment = ENVIRONMENT_QA
+    } else if(branchToClone.contains("PROD")) {
+      environment = ENVIRONMENT_PROD
+    }
+
+    stage('Clean workspace') {      
+      cleanWs()           
+    }
+
+    stage('Logging into AWS ECR') {      
+      sh "aws ecr get-login-password --region ${AWS_DEFAULT_REGION} | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com"           
+    }
         
-  cloneGitRepo(merged_into_branch)
-  def newDockerImageMap = createAndPushDockerImages(currentBuild, jobsByProjectPath, AWS_ACCOUNT_ID, AWS_DEFAULT_REGION, merged_into_branch)
+    cloneGitRepo(branchToClone)
 
-  if(merged_into_branch == "develop") {
-    createTaskDefinitions(newDockerImageMap, merged_into_branch)
+    def newDockerImageMap = createDockerImages(currentBuild, AWS_ACCOUNT_ID, AWS_DEFAULT_REGION, environment)
+
+    if(!mergedIntoMasterMain) {
+      createEcsServices(newDockerImageMap, environment)
+    }
   }
 }
