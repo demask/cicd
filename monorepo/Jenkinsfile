@@ -89,7 +89,7 @@ def runTerraform(dockerImageTag) {
   }
 }
 
-def createTaskDefinitions(newDockerImageMap, environment) {
+def createEcsServices(newDockerImageMap, environment) {
   def jobAlreadyCreated = false
   newDockerImageMap.each{
     if(!jobAlreadyCreated && (it.key == 'job2_1' || it.key == 'job2_2')) {
@@ -106,22 +106,18 @@ def createTaskDefinitions(newDockerImageMap, environment) {
   }
 }
 
-def buildDockerImage(IMAGE_TAG, IMAGE_REPO_NAME, DOCKERFILE, AWS_ACCOUNT_ID, AWS_DEFAULT_REGION, newDockerImageMap) {
+def buildAndPushDockerImage(IMAGE_TAG, IMAGE_REPO_NAME, DOCKERFILE, AWS_ACCOUNT_ID, AWS_DEFAULT_REGION, newDockerImageMap) {
   def REPOSITORY_URI = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${IMAGE_REPO_NAME}"
 
-  stage('Building image') {
-    dockerImage = docker.build("${IMAGE_REPO_NAME}:${IMAGE_TAG}", "-f ${DOCKERFILE} .")                         
-  }
-   
-  stage('Push image to ECR') {         
-    sh "docker tag ${IMAGE_REPO_NAME}:${IMAGE_TAG} ${REPOSITORY_URI}:${IMAGE_TAG}"
-    sh "docker push ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${IMAGE_REPO_NAME}:${IMAGE_TAG}"                            
-  }
+  dockerImage = docker.build("${IMAGE_REPO_NAME}:${IMAGE_TAG}", "-f ${DOCKERFILE} .")   
+
+  sh "docker tag ${IMAGE_REPO_NAME}:${IMAGE_TAG} ${REPOSITORY_URI}:${IMAGE_TAG}"
+  sh "docker push ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${IMAGE_REPO_NAME}:${IMAGE_TAG}"     
 
   newDockerImageMap[IMAGE_REPO_NAME] = IMAGE_TAG
 }
 
-def createAndPushDockerImages(currentBuild, jobsByProjectPath, AWS_ACCOUNT_ID, AWS_DEFAULT_REGION, environment, runAllJobs) {
+def createDockerImages(currentBuild, jobsByProjectPath, AWS_ACCOUNT_ID, AWS_DEFAULT_REGION, environment, runAllJobs) {
   def newDockerImageMap = [:]
   dir("${env.WORKSPACE}/code_directory"){  
     def jobs
@@ -145,31 +141,33 @@ def createAndPushDockerImages(currentBuild, jobsByProjectPath, AWS_ACCOUNT_ID, A
       IMAGE_TAG = "prod_" + IMAGE_TAG
     }
 
-    jobs.each{
-      def DOCKERFILE
-      def IMAGE_REPO_NAME
-      if(it.key) {
-        IMAGE_REPO_NAME = it.key
-      }
-
-      if(it.key == 'job1' && it.value) {
-        DOCKERFILE = 'Dockerfile'
-      } else if(it.key == 'job3' && it.value) {
-        DOCKERFILE = 'DockerfileJob3'
-      } else if(it.key == 'job2_1' && it.value) {
-        DOCKERFILE = 'Dockerfile'
-      } else if(it.key == 'job2_2' && it.value) {
-        DOCKERFILE = 'Dockerfile'
-      }
-
-      if(it.key == 'job3' && it.value && DOCKERFILE && IMAGE_REPO_NAME) {
-        dir("${env.WORKSPACE}/code_directory/job3"){
-          buildDockerImage(IMAGE_TAG, IMAGE_REPO_NAME, DOCKERFILE, AWS_ACCOUNT_ID, AWS_DEFAULT_REGION, newDockerImageMap)
+    stage('Build and push images') {
+      jobs.each{
+        def DOCKERFILE
+        def IMAGE_REPO_NAME
+        if(it.key) {
+          IMAGE_REPO_NAME = it.key
         }
-      } else if(DOCKERFILE && IMAGE_REPO_NAME) {
-        buildDockerImage(IMAGE_TAG, IMAGE_REPO_NAME, DOCKERFILE, AWS_ACCOUNT_ID, AWS_DEFAULT_REGION, newDockerImageMap)
-      }
-    } 
+
+        if(it.key == 'job1' && it.value) {
+          DOCKERFILE = 'Dockerfile'
+        } else if(it.key == 'job3' && it.value) {
+          DOCKERFILE = 'DockerfileJob3'
+        } else if(it.key == 'job2_1' && it.value) {
+          DOCKERFILE = 'Dockerfile'
+        } else if(it.key == 'job2_2' && it.value) {
+          DOCKERFILE = 'Dockerfile'
+        }
+
+        if(it.key == 'job3' && it.value && DOCKERFILE && IMAGE_REPO_NAME) {
+          dir("${env.WORKSPACE}/code_directory/job3"){
+            buildAndPushDockerImage(IMAGE_TAG, IMAGE_REPO_NAME, DOCKERFILE, AWS_ACCOUNT_ID, AWS_DEFAULT_REGION, newDockerImageMap)
+          }
+        } else if(DOCKERFILE && IMAGE_REPO_NAME) {
+          buildAndPushDockerImage(IMAGE_TAG, IMAGE_REPO_NAME, DOCKERFILE, AWS_ACCOUNT_ID, AWS_DEFAULT_REGION, newDockerImageMap)
+        }
+      } 
+    }
   }
 
   return newDockerImageMap
@@ -197,7 +195,7 @@ node {
   def AWS_ACCOUNT_ID="246005639140"
   def AWS_DEFAULT_REGION="eu-central-1" 
 
-  def tagRegex = /.*DEMO.*|.*QA.*/
+  def tagRegex = /.*DEMO.*|.*QA.*|.*PROD.*/
   def mergedIntoDevelop = "$merged" == "true" && "$branch" == "develop"
   def mergedIntoMasterMain = "$merged" == "true" && ("$branch" == "master" || "$branch" == "main")
   def tagPushed = "$ref_type" == "tag" && "$tag" ==~ tagRegex
@@ -234,10 +232,10 @@ node {
         
     cloneGitRepo(branchToClone)
 
-    def newDockerImageMap = createAndPushDockerImages(currentBuild, jobsByProjectPath, AWS_ACCOUNT_ID, AWS_DEFAULT_REGION, environment, runAllJobs)
+    def newDockerImageMap = createDockerImages(currentBuild, jobsByProjectPath, AWS_ACCOUNT_ID, AWS_DEFAULT_REGION, environment, runAllJobs)
 
     if(!mergedIntoMasterMain) {
-      createTaskDefinitions(newDockerImageMap, environment)
+      createEcsServices(newDockerImageMap, environment)
     }
   }
 }
