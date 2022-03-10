@@ -208,7 +208,7 @@ node {
     string(name: 'branch', defaultValue: '', description: 'Branch on which was merged', trim: true),
     string(name: 'merged', defaultValue: '', description: 'Did merge occured', trim: true),
     string(name: 'ref_type', defaultValue: '', description: 'Ref type', trim: true),
-    string(name: 'tag', defaultValue: '', description: 'Tag', trim: true)
+    string(name: 'tag', defaultValue: '', description: 'Tag', trim: true),
     string(name: 'repository', defaultValue: '', description: 'Repository', trim: true)
   ]
 
