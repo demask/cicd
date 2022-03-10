@@ -1,17 +1,35 @@
 import jenkins.*;
 import jenkins.model.*;
 
+AWS_ACCOUNT_ID="246005639140"
+AWS_DEFAULT_REGION="eu-central-1" 
+
 ENVIRONMENT_DEV = "dev"
 ENVIRONMENT_DEMO = "demo"
 ENVIRONMENT_QA = "qa"
 ENVIRONMENT_PROD = "prod"
 ENVIRONMENT_MASTER = "master"
 
-def runAllJobs = [
+REPOSITORY_MONOREPO = "aws_codebuild_codedeploy_nodeJs_demo"
+REPOSITORY_MULTIREPO = "repo-free"
+
+REPOSITORY_MONOREPO_URL = "https://github.com/demask/aws_codebuild_codedeploy_nodeJs_demo.git"
+REPOSITORY_MULTIREPO_URL = "https://github.com/demask/repo-free.git"
+
+TERRAFORM_REPO_URL = "https://github.com/demask/aws_codebuild_codedeploy_nodeJs_demo_terraform.git"
+TERRAFORM_REPO_BRANCH = "master"
+
+GIT_CREDENTIALS_ID = ""
+
+def runMonorepoJobs = [
   "job1" : true,
   "job2_1" : true,
   "job2_2" : true,
   "job3" : true
+]
+
+def runMultirepoJob = [
+  "other-repo-job" : true
 ]
 
 // List all project paths for which git commit is watched
@@ -55,24 +73,29 @@ def jobsToRun(build, jobsByProjectPath) {
   jobsToRun
 }
 
-def cloneGitRepo(branchToClone) {    
+def cloneGitRepo(branchToClone, currentRepo) {    
+  def repoUrl
+  if(currentRepo == REPOSITORY_MONOREPO) {
+    repoUrl = REPOSITORY_MONOREPO_URL
+  } else if(currentRepo == REPOSITORY_MULTIREPO) {
+    repoUrl = REPOSITORY_MULTIREPO_URL
+  }
+  
   checkout([
     $class: 'GitSCM', 
     branches: [[name: "$branchToClone"]], 
     doGenerateSubmoduleConfigurations: false, 
     extensions: [[$class: 'RelativeTargetDirectory', relativeTargetDir: 'code_directory']], 
     submoduleCfg: [], 
-    userRemoteConfigs: [[credentialsId: '', url: 'https://github.com/demask/aws_codebuild_codedeploy_nodeJs_demo.git']]])            
+    userRemoteConfigs: [[credentialsId: "$GIT_CREDENTIALS_ID", url: "$repoUrl"]]])            
   
-
-         
   checkout([
     $class: 'GitSCM', 
-    branches: [[name: '*/master']], 
+    branches: [[name: "*/$TERRAFORM_REPO_BRANCH"]], 
     doGenerateSubmoduleConfigurations: false, 
     extensions: [[$class: 'RelativeTargetDirectory', relativeTargetDir: 'terraform_directory']], 
     submoduleCfg: [], 
-    userRemoteConfigs: [[credentialsId: '', url: 'https://github.com/demask/aws_codebuild_codedeploy_nodeJs_demo_terraform.git']]])
+    userRemoteConfigs: [[credentialsId: "$GIT_CREDENTIALS_ID", url: "$TERRAFORM_REPO_URL"]]])
 }
 
 def runTerraform(dockerImageTag) {   
@@ -100,7 +123,7 @@ def createEcsServices(newDockerImageMap, environment) {
   }
 }
 
-def buildAndPushDockerImage(IMAGE_TAG, IMAGE_REPO_NAME, DOCKERFILE, AWS_ACCOUNT_ID, AWS_DEFAULT_REGION) {
+def buildAndPushDockerImage(IMAGE_TAG, IMAGE_REPO_NAME, DOCKERFILE) {
   def REPOSITORY_URI = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${IMAGE_REPO_NAME}"
 
   dockerImage = docker.build("${IMAGE_REPO_NAME}:${IMAGE_TAG}", "-f ${DOCKERFILE} .")   
@@ -109,15 +132,18 @@ def buildAndPushDockerImage(IMAGE_TAG, IMAGE_REPO_NAME, DOCKERFILE, AWS_ACCOUNT_
   sh "docker push ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${IMAGE_REPO_NAME}:${IMAGE_TAG}"     
 }
 
-def createDockerImages(currentBuild, jobsByProjectPath, AWS_ACCOUNT_ID, AWS_DEFAULT_REGION, environment, runAllJobs) {
+def createDockerImages(currentBuild, jobsByProjectPath, environment, runMonorepoJobs, runMultirepoJob, currentRepo) {
   def newDockerImageMap = [:]
   dir("${env.WORKSPACE}/code_directory"){  
     def jobs
-    if(environment == ENVIRONMENT_DEV || environment == ENVIRONMENT_MASTER) { 
+
+    if(currentRepo == REPOSITORY_MULTIREPO) {
+      jobs = runMultirepoJob
+    } else if(environment == ENVIRONMENT_DEV || environment == ENVIRONMENT_MASTER) { 
       jobs = jobsToRun(currentBuild, jobsByProjectPath)
       addPhpIfNginxPresent(jobs)
     } else {
-      jobs = runAllJobs
+      jobs = runMonorepoJobs
     }
     
     def IMAGE_TAG = sh (script: 'git rev-parse --short HEAD',returnStdout: true).trim()
@@ -146,6 +172,8 @@ def createDockerImages(currentBuild, jobsByProjectPath, AWS_ACCOUNT_ID, AWS_DEFA
         DOCKERFILE = 'Dockerfile'
       } else if(it.key == 'job2_2' && it.value) {
         DOCKERFILE = 'Dockerfile2'
+      } else if(it.key == 'other-repo-job' && it.value) {
+        DOCKERFILE = 'Dockerfile'
       }
 
       if(it.key == 'job3' && it.value && DOCKERFILE && IMAGE_REPO_NAME) {
@@ -181,11 +209,11 @@ node {
     string(name: 'merged', defaultValue: '', description: 'Did merge occured', trim: true),
     string(name: 'ref_type', defaultValue: '', description: 'Ref type', trim: true),
     string(name: 'tag', defaultValue: '', description: 'Tag', trim: true)
+    string(name: 'repository', defaultValue: '', description: 'Repository', trim: true)
   ]
-  def AWS_ACCOUNT_ID="246005639140"
-  def AWS_DEFAULT_REGION="eu-central-1" 
 
   def tagRegex = /.*DEMO.*|.*QA.*|.*PROD.*/
+  def currentRepo = "$repository"
   def mergedIntoDevelop = "$merged" == "true" && "$branch" == "develop"
   def mergedIntoMasterMain = "$merged" == "true" && ("$branch" == "master" || "$branch" == "main")
   def tagPushed = "$ref_type" == "tag" && "$tag" ==~ tagRegex
@@ -222,12 +250,12 @@ node {
       }
         
       stage('Cloning Git') {
-        cloneGitRepo(branchToClone)
+        cloneGitRepo(branchToClone, currentRepo)
       }
 
       def newDockerImageMap
       stage('Build and push images') {
-        newDockerImageMap = createDockerImages(currentBuild, jobsByProjectPath, AWS_ACCOUNT_ID, AWS_DEFAULT_REGION, environment, runAllJobs)
+        newDockerImageMap = createDockerImages(currentBuild, jobsByProjectPath, environment, runMonorepoJobs, runMultirepoJob, currentRepo)
       }
       
       if(environment != ENVIRONMENT_MASTER && environment != ENVIRONMENT_PROD) {
