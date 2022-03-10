@@ -178,11 +178,11 @@ def createDockerImages(currentBuild, jobsByProjectPath, environment, runMonorepo
 
       if(it.key == 'job3' && it.value && DOCKERFILE && IMAGE_REPO_NAME) {
         dir("${env.WORKSPACE}/code_directory/job3"){
-          buildAndPushDockerImage(IMAGE_TAG, IMAGE_REPO_NAME, DOCKERFILE, AWS_ACCOUNT_ID, AWS_DEFAULT_REGION)
+          buildAndPushDockerImage(IMAGE_TAG, IMAGE_REPO_NAME, DOCKERFILE)
           newDockerImageMap[IMAGE_REPO_NAME] = IMAGE_TAG
         }
       } else if(DOCKERFILE && IMAGE_REPO_NAME) {
-        buildAndPushDockerImage(IMAGE_TAG, IMAGE_REPO_NAME, DOCKERFILE, AWS_ACCOUNT_ID, AWS_DEFAULT_REGION)
+        buildAndPushDockerImage(IMAGE_TAG, IMAGE_REPO_NAME, DOCKERFILE)
         newDockerImageMap[IMAGE_REPO_NAME] = IMAGE_TAG
       } 
     }  
