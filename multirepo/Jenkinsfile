@@ -133,7 +133,7 @@ node {
 
     def newDockerImageMap = createDockerImages(currentBuild, AWS_ACCOUNT_ID, AWS_DEFAULT_REGION, environment)
 
-    if(!mergedIntoMasterMain) {
+    if(environment != ENVIRONMENT_MASTER && environment != ENVIRONMENT_PROD) {
       createEcsServices(newDockerImageMap, environment)
     }
   }
