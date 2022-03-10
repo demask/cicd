@@ -220,12 +220,6 @@ node {
       environment = ENVIRONMENT_PROD
     }
 
-    println mergedIntoDevelop
-    println mergedIntoMasterMain
-    println tagPushed
-    println branchToClone
-    println environment
-
     stage('Clean workspace') {      
       cleanWs()           
     }
