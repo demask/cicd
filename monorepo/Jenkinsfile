@@ -77,31 +77,29 @@ def cloneGitRepo(branchToClone) {
   } 
 }
 
-def runTerraform(dockerImageTag) {
-  stage('Terraform Init') {     
-    sh 'terraform init -no-color'
-  }
-                
-  stage('Terraform Apply') {     
-    sh ("""terraform apply \
+def runTerraform(dockerImageTag) {   
+  sh 'terraform init -no-color'
+                  
+  sh ("""terraform apply \
     -var=\"docker_image_tag=${dockerImageTag}\" \
     -auto-approve -no-color""")
-  }
 }
 
 def createEcsServices(newDockerImageMap, environment) {
   def jobAlreadyCreated = false
-  newDockerImageMap.each{
-    if(!jobAlreadyCreated && (it.key == 'job2_1' || it.key == 'job2_2')) {
-      dir("${env.WORKSPACE}/terraform_directory/${environment}/ecs-service/job2"){
-        runTerraform(it.value)     
-      } 
+  stage('Run Terraform') {  
+    newDockerImageMap.each{
+      if(!jobAlreadyCreated && (it.key == 'job2_1' || it.key == 'job2_2')) {
+        dir("${env.WORKSPACE}/terraform_directory/${environment}/ecs-service/job2"){
+          runTerraform(it.value)     
+        } 
 
-      jobAlreadyCreated = true
-    } else if(it.key != 'job2_1' && it.key != 'job2_2') {
-      dir("${env.WORKSPACE}/terraform_directory/${environment}/ecs-service/${it.key}"){
-        runTerraform(it.value)     
-      } 
+        jobAlreadyCreated = true
+      } else if(it.key != 'job2_1' && it.key != 'job2_2') {
+        dir("${env.WORKSPACE}/terraform_directory/${environment}/ecs-service/${it.key}"){
+          runTerraform(it.value)     
+        } 
+      }
     }
   }
 }
