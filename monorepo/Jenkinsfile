@@ -1,12 +1,25 @@
 import jenkins.*;
 import jenkins.model.*;
 
+def ENVIRONMENT_DEV = "dev"
+def ENVIRONMENT_DEMO = "demo"
+def ENVIRONMENT_QA = "qa"
+def ENVIRONMENT_PROD = "prod"
+def ENVIRONMENT_MASTER = "master"
+
+def runAllJobs = [
+  "job1" : true,
+  "job2_1" : true,
+  "job2_2" : true,
+  "job3" : true
+]
+
 // List all project paths for which git commit is watched
 def jobsByProjectPath = [
     "job1/": "job1",
     "job2/": "job2_1",
     "job3/": "job3"
-  ]
+]
 
 // Find all jobs for project paths in which git commit happend
 def jobsToRun(build, jobsByProjectPath) {
@@ -78,26 +91,15 @@ def runTerraform(dockerImageTag) {
 
 def createTaskDefinitions(newDockerImageMap, environment) {
   def jobAlreadyCreated = false
-  def terraformDirectoryByEnvironment = "dev"
-  if(environment == "dev") {
-    terraformDirectoryByEnvironment = "dev"
-  } else if(environment == "prod") {
-    terraformDirectoryByEnvironment = "prod"
-  } else if(environment == "qa") {
-    terraformDirectoryByEnvironment = "qa"
-  } else if(environment == "demo") {
-    terraformDirectoryByEnvironment = "demo"
-  }
-
   newDockerImageMap.each{
     if(!jobAlreadyCreated && (it.key == 'job2_1' || it.key == 'job2_2')) {
-      dir("${env.WORKSPACE}/terraform_directory/${terraformDirectoryByEnvironment}/ecs-service/job2"){
+      dir("${env.WORKSPACE}/terraform_directory/${environment}/ecs-service/job2"){
         runTerraform(it.value)     
       } 
 
       jobAlreadyCreated = true
     } else if(it.key != 'job2_1' && it.key != 'job2_2') {
-      dir("${env.WORKSPACE}/terraform_directory/${terraformDirectoryByEnvironment}/ecs-service/${it.key}"){
+      dir("${env.WORKSPACE}/terraform_directory/${environment}/ecs-service/${it.key}"){
         runTerraform(it.value)     
       } 
     }
@@ -123,28 +125,23 @@ def createAndPushDockerImages(currentBuild, jobsByProjectPath, AWS_ACCOUNT_ID, A
   def newDockerImageMap = [:]
   dir("${env.WORKSPACE}/code_directory"){  
     def jobs
-    if(environment == "dev" || environment == "master") {
+    if(environment == ENVIRONMENT_DEV || environment == ENVIRONMENT_MASTER) {
       stage('Check jobs to run') { 
         jobs = jobsToRun(currentBuild, jobsByProjectPath)
         addPhpIfNginxPresent(jobs)
       }
     } else {
-      jobs = [
-        "job1" : true,
-        "job2_1" : true,
-        "job2_2" : true,
-        "job3" : true
-      ]
+      jobs = runAllJobs
     }
     
     def IMAGE_TAG = sh (script: 'git rev-parse --short HEAD',returnStdout: true).trim()
-    if(environment == "dev") {
+    if(environment == ENVIRONMENT_DEV) {
       IMAGE_TAG = "dev_" + IMAGE_TAG
-    } else if(environment == "demo") {
+    } else if(environment == ENVIRONMENT_DEMO) {
       IMAGE_TAG = "demo_" + IMAGE_TAG
-    } else if(environment == "qa") {
+    } else if(environment == ENVIRONMENT_QA) {
       IMAGE_TAG = "qa_" + IMAGE_TAG
-    } else if(environment == "prod") {
+    } else if(environment == ENVIRONMENT_PROD || environment == ENVIRONMENT_MASTER) {
       IMAGE_TAG = "prod_" + IMAGE_TAG
     }
 
@@ -202,29 +199,29 @@ node {
 
   def tagRegex = /.*DEMO.*|.*QA.*/
   def mergedIntoDevelop = "$merged" == "true" && "$branch" == "develop"
-  def mergedIntoMaster = "$merged" == "true" && "$branch" == "master"
+  def mergedIntoMasterMain = "$merged" == "true" && ("$branch" == "master" || "$branch" == "main")
   def tagPushed = "$ref_type" == "tag" && "$tag" ==~ tagRegex
 
-  if(mergedIntoMaster || mergedIntoDevelop || tagPushed) {
+  if(mergedIntoMasterMain || mergedIntoDevelop || tagPushed) {
     def branchToClone
     
-    if(mergedIntoMaster || mergedIntoDevelop) {
+    if(mergedIntoMasterMain || mergedIntoDevelop) {
       branchToClone = "$branch"
     } else {
       branchToClone = "refs/tags/$tag"
     }
 
     def environment
-    if(mergedIntoMaster) {
-      environment = "master"
+    if(mergedIntoMasterMain) {
+      environment = ENVIRONMENT_MASTER
     } else if(mergedIntoDevelop) {
-      environment = "dev"
+      environment = ENVIRONMENT_DEV
     } else if(branchToClone.contains("DEMO")) {
-      environment = "demo"
+      environment = ENVIRONMENT_DEMO
     } else if(branchToClone.contains("QA")) {
-      environment = "qa"
+      environment = ENVIRONMENT_QA
     } else if(branchToClone.contains("PROD")) {
-      environment = "prod"
+      environment = ENVIRONMENT_PROD
     }
 
     stage('Clean workspace') {      
@@ -239,7 +236,7 @@ node {
 
     def newDockerImageMap = createAndPushDockerImages(currentBuild, jobsByProjectPath, AWS_ACCOUNT_ID, AWS_DEFAULT_REGION, environment)
 
-    if(!mergedIntoMaster) {
+    if(!mergedIntoMasterMain) {
       createTaskDefinitions(newDockerImageMap, environment)
     }
   }
