@@ -7,26 +7,24 @@ ENVIRONMENT_QA = "qa"
 ENVIRONMENT_PROD = "prod"
 ENVIRONMENT_MASTER = "master"
 
-def cloneGitRepo(branchToClone) {
-  stage('Cloning Git') {           
-    checkout([
-      $class: 'GitSCM', 
-      branches: [[name: "*/$branchToClone"]], 
-      doGenerateSubmoduleConfigurations: false, 
-      extensions: [[$class: 'RelativeTargetDirectory', relativeTargetDir: 'code_directory']], 
-      submoduleCfg: [], 
-      userRemoteConfigs: [[credentialsId: '', url: 'https://github.com/demask/repo-free.git']]])                 
-  }
+def cloneGitRepo(branchToClone) {          
+  checkout([
+    $class: 'GitSCM', 
+    branches: [[name: "*/$branchToClone"]], 
+    doGenerateSubmoduleConfigurations: false, 
+    extensions: [[$class: 'RelativeTargetDirectory', relativeTargetDir: 'code_directory']], 
+    submoduleCfg: [], 
+    userRemoteConfigs: [[credentialsId: '', url: 'https://github.com/demask/repo-free.git']]])                 
+  
 
-  stage('Cloning Terraform Git') {           
-    checkout([
-      $class: 'GitSCM', 
-      branches: [[name: '*/master']], 
-      doGenerateSubmoduleConfigurations: false, 
-      extensions: [[$class: 'RelativeTargetDirectory', relativeTargetDir: 'terraform_directory']], 
-      submoduleCfg: [], 
-      userRemoteConfigs: [[credentialsId: '', url: 'https://github.com/demask/aws_codebuild_codedeploy_nodeJs_demo_terraform.git']]])                 
-  } 
+            
+  checkout([
+    $class: 'GitSCM', 
+    branches: [[name: '*/master']], 
+    doGenerateSubmoduleConfigurations: false, 
+    extensions: [[$class: 'RelativeTargetDirectory', relativeTargetDir: 'terraform_directory']], 
+    submoduleCfg: [], 
+    userRemoteConfigs: [[credentialsId: '', url: 'https://github.com/demask/aws_codebuild_codedeploy_nodeJs_demo_terraform.git']]])                 
 }
 
 def runTerraform(dockerImageTag) {
@@ -38,15 +36,13 @@ def runTerraform(dockerImageTag) {
 }
 
 def createEcsServices(newDockerImageMap, environment) {
-  stage('Run Terraform') { 
-    newDockerImageMap.each{
-      if(it.key == 'other-repo-job') {
-        dir("${env.WORKSPACE}/terraform_directory/${environment}/ecs-service/other-repo-job"){
-          runTerraform(it.value)     
-        } 
+  newDockerImageMap.each{
+    if(it.key == 'other-repo-job') {
+      dir("${env.WORKSPACE}/terraform_directory/${environment}/ecs-service/other-repo-job"){
+        runTerraform(it.value)     
       } 
-    }   
-  }
+    } 
+  }   
 }
 
 def buildAndPushDockerImage(IMAGE_TAG, IMAGE_REPO_NAME, DOCKERFILE, AWS_ACCOUNT_ID, AWS_DEFAULT_REGION) {
@@ -73,12 +69,10 @@ def createDockerImages(currentBuild, AWS_ACCOUNT_ID, AWS_DEFAULT_REGION, environ
       IMAGE_TAG = "prod_" + IMAGE_TAG
     }
     
-    stage('Build and push images') {
-      def DOCKERFILE = 'Dockerfile'
-      def IMAGE_REPO_NAME="other-repo-job"
-      buildAndPushDockerImage(IMAGE_TAG, IMAGE_REPO_NAME, DOCKERFILE, AWS_ACCOUNT_ID, AWS_DEFAULT_REGION)
-      newDockerImageMap[IMAGE_REPO_NAME] = IMAGE_TAG
-    }
+    def DOCKERFILE = 'Dockerfile'
+    def IMAGE_REPO_NAME="other-repo-job"
+    buildAndPushDockerImage(IMAGE_TAG, IMAGE_REPO_NAME, DOCKERFILE, AWS_ACCOUNT_ID, AWS_DEFAULT_REGION)
+    newDockerImageMap[IMAGE_REPO_NAME] = IMAGE_TAG
   }
 
   return newDockerImageMap
@@ -129,13 +123,20 @@ node {
       stage('Logging into AWS ECR') {      
         sh "aws ecr get-login-password --region ${AWS_DEFAULT_REGION} | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com"           
       }
-        
-      cloneGitRepo(branchToClone)
+      
+      stage('Cloning Git') {
+        cloneGitRepo(branchToClone)
+      }
 
-      def newDockerImageMap = createDockerImages(currentBuild, AWS_ACCOUNT_ID, AWS_DEFAULT_REGION, environment)
-
+      def newDockerImageMap
+      stage('Build and push images') {
+        newDockerImageMap = createDockerImages(currentBuild, AWS_ACCOUNT_ID, AWS_DEFAULT_REGION, environment)
+      }
+      
       if(environment != ENVIRONMENT_MASTER && environment != ENVIRONMENT_PROD) {
-        createEcsServices(newDockerImageMap, environment)
+        stage('Run Terraform') { 
+          createEcsServices(newDockerImageMap, environment)
+        }
       }
     }
   }

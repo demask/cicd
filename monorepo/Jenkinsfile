@@ -55,26 +55,24 @@ def jobsToRun(build, jobsByProjectPath) {
   jobsToRun
 }
 
-def cloneGitRepo(branchToClone) {
-  stage('Cloning Git') {    
-    checkout([
-      $class: 'GitSCM', 
-      branches: [[name: "$branchToClone"]], 
-      doGenerateSubmoduleConfigurations: false, 
-      extensions: [[$class: 'RelativeTargetDirectory', relativeTargetDir: 'code_directory']], 
-      submoduleCfg: [], 
-      userRemoteConfigs: [[credentialsId: '', url: 'https://github.com/demask/aws_codebuild_codedeploy_nodeJs_demo.git']]])            
-  }
+def cloneGitRepo(branchToClone) {    
+  checkout([
+    $class: 'GitSCM', 
+    branches: [[name: "$branchToClone"]], 
+    doGenerateSubmoduleConfigurations: false, 
+    extensions: [[$class: 'RelativeTargetDirectory', relativeTargetDir: 'code_directory']], 
+    submoduleCfg: [], 
+    userRemoteConfigs: [[credentialsId: '', url: 'https://github.com/demask/aws_codebuild_codedeploy_nodeJs_demo.git']]])            
+  
 
-  stage('Cloning Terraform Git') {           
-    checkout([
-      $class: 'GitSCM', 
-      branches: [[name: '*/master']], 
-      doGenerateSubmoduleConfigurations: false, 
-      extensions: [[$class: 'RelativeTargetDirectory', relativeTargetDir: 'terraform_directory']], 
-      submoduleCfg: [], 
-      userRemoteConfigs: [[credentialsId: '', url: 'https://github.com/demask/aws_codebuild_codedeploy_nodeJs_demo_terraform.git']]])                 
-  } 
+         
+  checkout([
+    $class: 'GitSCM', 
+    branches: [[name: '*/master']], 
+    doGenerateSubmoduleConfigurations: false, 
+    extensions: [[$class: 'RelativeTargetDirectory', relativeTargetDir: 'terraform_directory']], 
+    submoduleCfg: [], 
+    userRemoteConfigs: [[credentialsId: '', url: 'https://github.com/demask/aws_codebuild_codedeploy_nodeJs_demo_terraform.git']]])
 }
 
 def runTerraform(dockerImageTag) {   
@@ -87,19 +85,17 @@ def runTerraform(dockerImageTag) {
 
 def createEcsServices(newDockerImageMap, environment) {
   def jobAlreadyCreated = false
-  stage('Run Terraform') {  
-    newDockerImageMap.each{
-      if(!jobAlreadyCreated && (it.key == 'job2_1' || it.key == 'job2_2')) {
-        dir("${env.WORKSPACE}/terraform_directory/${environment}/ecs-service/job2"){
-          runTerraform(it.value)     
-        } 
+  newDockerImageMap.each{
+    if(!jobAlreadyCreated && (it.key == 'job2_1' || it.key == 'job2_2')) {
+      dir("${env.WORKSPACE}/terraform_directory/${environment}/ecs-service/job2"){
+        runTerraform(it.value)     
+      } 
 
-        jobAlreadyCreated = true
-      } else if(it.key != 'job2_1' && it.key != 'job2_2') {
-        dir("${env.WORKSPACE}/terraform_directory/${environment}/ecs-service/${it.key}"){
-          runTerraform(it.value)     
-        } 
-      }
+      jobAlreadyCreated = true
+    } else if(it.key != 'job2_1' && it.key != 'job2_2') {
+      dir("${env.WORKSPACE}/terraform_directory/${environment}/ecs-service/${it.key}"){
+        runTerraform(it.value)     
+      } 
     }
   }
 }
@@ -117,11 +113,9 @@ def createDockerImages(currentBuild, jobsByProjectPath, AWS_ACCOUNT_ID, AWS_DEFA
   def newDockerImageMap = [:]
   dir("${env.WORKSPACE}/code_directory"){  
     def jobs
-    if(environment == ENVIRONMENT_DEV || environment == ENVIRONMENT_MASTER) {
-      stage('Check jobs to run') { 
-        jobs = jobsToRun(currentBuild, jobsByProjectPath)
-        addPhpIfNginxPresent(jobs)
-      }
+    if(environment == ENVIRONMENT_DEV || environment == ENVIRONMENT_MASTER) { 
+      jobs = jobsToRun(currentBuild, jobsByProjectPath)
+      addPhpIfNginxPresent(jobs)
     } else {
       jobs = runAllJobs
     }
@@ -136,36 +130,34 @@ def createDockerImages(currentBuild, jobsByProjectPath, AWS_ACCOUNT_ID, AWS_DEFA
     } else if(environment == ENVIRONMENT_PROD || environment == ENVIRONMENT_MASTER) {
       IMAGE_TAG = "prod_" + IMAGE_TAG
     }
+    
+    jobs.each{
+      def DOCKERFILE
+      def IMAGE_REPO_NAME
+      if(it.key) {
+        IMAGE_REPO_NAME = it.key
+      }
 
-    stage('Build and push images') {
-      jobs.each{
-        def DOCKERFILE
-        def IMAGE_REPO_NAME
-        if(it.key) {
-          IMAGE_REPO_NAME = it.key
-        }
+      if(it.key == 'job1' && it.value) {
+        DOCKERFILE = 'Dockerfile'
+      } else if(it.key == 'job3' && it.value) {
+        DOCKERFILE = 'DockerfileJob3'
+      } else if(it.key == 'job2_1' && it.value) {
+        DOCKERFILE = 'Dockerfile'
+      } else if(it.key == 'job2_2' && it.value) {
+        DOCKERFILE = 'Dockerfile2'
+      }
 
-        if(it.key == 'job1' && it.value) {
-          DOCKERFILE = 'Dockerfile'
-        } else if(it.key == 'job3' && it.value) {
-          DOCKERFILE = 'DockerfileJob3'
-        } else if(it.key == 'job2_1' && it.value) {
-          DOCKERFILE = 'Dockerfile'
-        } else if(it.key == 'job2_2' && it.value) {
-          DOCKERFILE = 'Dockerfile2'
-        }
-
-        if(it.key == 'job3' && it.value && DOCKERFILE && IMAGE_REPO_NAME) {
-          dir("${env.WORKSPACE}/code_directory/job3"){
-            buildAndPushDockerImage(IMAGE_TAG, IMAGE_REPO_NAME, DOCKERFILE, AWS_ACCOUNT_ID, AWS_DEFAULT_REGION)
-            newDockerImageMap[IMAGE_REPO_NAME] = IMAGE_TAG
-          }
-        } else if(DOCKERFILE && IMAGE_REPO_NAME) {
+      if(it.key == 'job3' && it.value && DOCKERFILE && IMAGE_REPO_NAME) {
+        dir("${env.WORKSPACE}/code_directory/job3"){
           buildAndPushDockerImage(IMAGE_TAG, IMAGE_REPO_NAME, DOCKERFILE, AWS_ACCOUNT_ID, AWS_DEFAULT_REGION)
           newDockerImageMap[IMAGE_REPO_NAME] = IMAGE_TAG
-        } 
+        }
+      } else if(DOCKERFILE && IMAGE_REPO_NAME) {
+        buildAndPushDockerImage(IMAGE_TAG, IMAGE_REPO_NAME, DOCKERFILE, AWS_ACCOUNT_ID, AWS_DEFAULT_REGION)
+        newDockerImageMap[IMAGE_REPO_NAME] = IMAGE_TAG
       } 
-    }
+    }  
   }
 
   return newDockerImageMap
@@ -229,12 +221,19 @@ node {
         sh "aws ecr get-login-password --region ${AWS_DEFAULT_REGION} | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com"           
       }
         
-      cloneGitRepo(branchToClone)
+      stage('Cloning Git') {
+        cloneGitRepo(branchToClone)
+      }
 
-      def newDockerImageMap = createDockerImages(currentBuild, jobsByProjectPath, AWS_ACCOUNT_ID, AWS_DEFAULT_REGION, environment, runAllJobs)
-
+      def newDockerImageMap
+      stage('Build and push images') {
+        newDockerImageMap = createDockerImages(currentBuild, jobsByProjectPath, AWS_ACCOUNT_ID, AWS_DEFAULT_REGION, environment, runAllJobs)
+      }
+      
       if(environment != ENVIRONMENT_MASTER && environment != ENVIRONMENT_PROD) {
-        createEcsServices(newDockerImageMap, environment)
+        stage('Run Terraform') { 
+          createEcsServices(newDockerImageMap, environment)
+        }
       }
     }
   }
