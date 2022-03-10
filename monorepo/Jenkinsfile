@@ -121,7 +121,7 @@ def buildDockerImage(IMAGE_TAG, IMAGE_REPO_NAME, DOCKERFILE, AWS_ACCOUNT_ID, AWS
   newDockerImageMap[IMAGE_REPO_NAME] = IMAGE_TAG
 }
 
-def createAndPushDockerImages(currentBuild, jobsByProjectPath, AWS_ACCOUNT_ID, AWS_DEFAULT_REGION, environment) {
+def createAndPushDockerImages(currentBuild, jobsByProjectPath, AWS_ACCOUNT_ID, AWS_DEFAULT_REGION, environment, runAllJobs) {
   def newDockerImageMap = [:]
   dir("${env.WORKSPACE}/code_directory"){  
     def jobs
@@ -234,7 +234,7 @@ node {
         
     cloneGitRepo(branchToClone)
 
-    def newDockerImageMap = createAndPushDockerImages(currentBuild, jobsByProjectPath, AWS_ACCOUNT_ID, AWS_DEFAULT_REGION, environment)
+    def newDockerImageMap = createAndPushDockerImages(currentBuild, jobsByProjectPath, AWS_ACCOUNT_ID, AWS_DEFAULT_REGION, environment, runAllJobs)
 
     if(!mergedIntoMasterMain) {
       createTaskDefinitions(newDockerImageMap, environment)
