@@ -11,7 +11,7 @@ def cloneGitRepo(branchToClone) {
   stage('Cloning Git') {           
     checkout([
       $class: 'GitSCM', 
-      branches: [[name: '*/$branchToClone']], 
+      branches: [[name: "*/$branchToClone"]], 
       doGenerateSubmoduleConfigurations: false, 
       extensions: [[$class: 'RelativeTargetDirectory', relativeTargetDir: 'code_directory']], 
       submoduleCfg: [], 
