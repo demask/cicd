@@ -1,11 +1,11 @@
 import jenkins.*;
 import jenkins.model.*;
 
-def ENVIRONMENT_DEV = "dev"
-def ENVIRONMENT_DEMO = "demo"
-def ENVIRONMENT_QA = "qa"
-def ENVIRONMENT_PROD = "prod"
-def ENVIRONMENT_MASTER = "master"
+ENVIRONMENT_DEV = "dev"
+ENVIRONMENT_DEMO = "demo"
+ENVIRONMENT_QA = "qa"
+ENVIRONMENT_PROD = "prod"
+ENVIRONMENT_MASTER = "master"
 
 def runAllJobs = [
   "job1" : true,
