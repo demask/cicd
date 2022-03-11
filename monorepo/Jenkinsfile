@@ -224,13 +224,14 @@ node {
     string(name: 'merged', defaultValue: '', description: 'Did merge occured', trim: true),
     string(name: 'ref_type', defaultValue: '', description: 'Ref type', trim: true),
     string(name: 'tag', defaultValue: '', description: 'Tag', trim: true),
-    string(name: 'repository', defaultValue: '', description: 'Repository', trim: true)
+    string(name: 'repository', defaultValue: '', description: 'Repository', trim: true),
+    string(name: 'action', defaultValue: '', description: 'Action', trim: true)
   ]
 
   def tagRegex = /.*DEMO.*|.*QA.*|.*PROD.*/
   def currentRepo = "$repository"
-  def mergedIntoDevelop = "$merged" == "true" && "$branch" == "develop"
-  def mergedIntoMasterMain = "$merged" == "true" && ("$branch" == "master" || "$branch" == "main")
+  def mergedIntoDevelop = "$action" == "closed" && "$merged" == "true" && "$branch" == "develop"
+  def mergedIntoMasterMain = "$action" == "closed" && "$merged" == "true" && ("$branch" == "master" || "$branch" == "main")
   def tagPushed = "$ref_type" == "tag" && "$tag" ==~ tagRegex
 
   if(mergedIntoMasterMain || mergedIntoDevelop || tagPushed) {
