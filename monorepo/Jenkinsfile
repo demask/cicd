@@ -21,10 +21,6 @@ TERRAFORM_REPO_BRANCH = "master"
 
 GIT_CREDENTIALS_ID = ""
 
-BRANCH_TO_CLONE_MASTER = "master"
-BRANCH_TO_CLONE_MAIN = "main"
-BRANCH_TO_CLONE_DEVELOP = "develop"
-
 def runMonorepoJobs = [
   "job1" : true,
   "job2_1" : true,
@@ -85,20 +81,11 @@ def cloneGitRepo(branchToClone, currentRepo) {
     repoUrl = REPOSITORY_MULTIREPO_URL
   }
   
-  def gitClonePath = "code_directory"
-  if(branchToClone == BRANCH_TO_CLONE_MASTER) {
-    gitClonePath = "master/code_directory"
-  } else if(branchToClone == BRANCH_TO_CLONE_MAIN) {
-    gitClonePath = "main/code_directory"
-  } else if(branchToClone == BRANCH_TO_CLONE_DEVELOP) {
-    gitClonePath = "develop/code_directory"
-  }
-
   checkout([
     $class: 'GitSCM', 
     branches: [[name: "$branchToClone"]], 
     doGenerateSubmoduleConfigurations: false, 
-    extensions: [[$class: 'RelativeTargetDirectory', relativeTargetDir: "$gitClonePath"]], 
+    extensions: [[$class: 'RelativeTargetDirectory', relativeTargetDir: 'code_directory']], 
     submoduleCfg: [], 
     userRemoteConfigs: [[credentialsId: "$GIT_CREDENTIALS_ID", url: "$repoUrl"]]])            
   
@@ -109,8 +96,6 @@ def cloneGitRepo(branchToClone, currentRepo) {
     extensions: [[$class: 'RelativeTargetDirectory', relativeTargetDir: 'terraform_directory']], 
     submoduleCfg: [], 
     userRemoteConfigs: [[credentialsId: "$GIT_CREDENTIALS_ID", url: "$TERRAFORM_REPO_URL"]]])
-
-  return gitClonePath
 }
 
 def runTerraform(dockerImageTag) {   
@@ -147,9 +132,9 @@ def buildAndPushDockerImage(IMAGE_TAG, IMAGE_REPO_NAME, DOCKERFILE) {
   sh "docker push ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${IMAGE_REPO_NAME}:${IMAGE_TAG}"     
 }
 
-def createDockerImages(currentBuild, jobsByProjectPath, environment, runMonorepoJobs, runMultirepoJob, currentRepo, gitClonePath) {
+def createDockerImages(currentBuild, jobsByProjectPath, environment, runMonorepoJobs, runMultirepoJob, currentRepo) {
   def newDockerImageMap = [:]
-  dir("${env.WORKSPACE}/$gitClonePath"){  
+  dir("${env.WORKSPACE}/code_directory"){  
     def jobs
 
     if(currentRepo == REPOSITORY_MULTIREPO) {
@@ -192,7 +177,7 @@ def createDockerImages(currentBuild, jobsByProjectPath, environment, runMonorepo
       }
 
       if(it.key == 'job3' && it.value && DOCKERFILE && IMAGE_REPO_NAME) {
-        dir("${env.WORKSPACE}/$gitClonePath/job3"){
+        dir("${env.WORKSPACE}/code_directory/job3"){
           buildAndPushDockerImage(IMAGE_TAG, IMAGE_REPO_NAME, DOCKERFILE)
           newDockerImageMap[IMAGE_REPO_NAME] = IMAGE_TAG
         }
@@ -264,15 +249,14 @@ node {
       stage('Logging into AWS ECR') {      
         sh "aws ecr get-login-password --region ${AWS_DEFAULT_REGION} | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com"           
       }
-
-      def gitClonePath 
+        
       stage('Cloning Git') {
-        gitClonePath = cloneGitRepo(branchToClone, currentRepo)
+        cloneGitRepo(branchToClone, currentRepo)
       }
 
       def newDockerImageMap
       stage('Build and push images') {
-        newDockerImageMap = createDockerImages(currentBuild, jobsByProjectPath, environment, runMonorepoJobs, runMultirepoJob, currentRepo, gitClonePath)
+        newDockerImageMap = createDockerImages(currentBuild, jobsByProjectPath, environment, runMonorepoJobs, runMultirepoJob, currentRepo)
       }
       
       if(environment != ENVIRONMENT_MASTER && environment != ENVIRONMENT_PROD) {
